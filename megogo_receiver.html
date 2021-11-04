@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script type="text/javascript"
+            src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js">
+    </script>
+    <style>
+        #player {
+            --theme-hue: 100;
+            --progress-color: rgb(34, 195, 177);
+            --break-color: rgba(255, 255, 255, 0.3);
+            --background-image: url('https://s1.vcdn.biz/static/61784721/Picture_overlay.jpg');
+            --logo-image: url('https://s9.vcdn.biz/static/61785311/Logo.png');
+            --watermark-image: url('https://s4.vcdn.biz/static/61786341/watermark.png');
+            --pause-image: url('https://s1.vcdn.biz/static/f/1201218961/image.jpg ');
+            --play-image: url('https://s1.vcdn.biz/static/f/1201219311/image.jpg');
+        }
+    </style>
+</head>
+<body>
+<cast-media-player id="player"></cast-media-player>
+<script>
+  const MESSAGE_CHANNEL = 'urn:x-cast:net.megogo.messaging';
+  const context = cast.framework.CastReceiverContext.getInstance();
+  const playerManager = context.getPlayerManager();
+  let audioTrack = null;
+
+  playerManager.setMediaPlaybackInfoHandler((loadRequest, playbackConfig) => {
+    audioTrack = null;
+    if (loadRequest.media.customData) {
+      if (loadRequest.media.customData.licenseUrl) {
+        playbackConfig.licenseUrl = loadRequest.media.customData.licenseUrl;
+      }
+      if (loadRequest.media.customData.audioTrack) {
+        audioTrack = loadRequest.media.customData.audioTrack;
+      }
+      if (loadRequest.media.customData.protectionSystem) {
+        if (loadRequest.media.customData.protectionSystem === 'widevine') {
+          playbackConfig.protectionSystem = cast.framework.ContentProtection.WIDEVINE;
+        } else if (loadRequest.media.customData.protectionSystem === 'playready') {
+          playbackConfig.protectionSystem = cast.framework.ContentProtection.PLAYREADY;
+        }
+      }
+    }
+    return playbackConfig;
+  });
+
+  playerManager.addEventListener(cast.framework.events.EventType.ERROR, (event) => {
+    playerManager.broadcastStatus(false, undefined, event);
+    context.sendCustomMessage(MESSAGE_CHANNEL, undefined, event);
+  });
+
+  playerManager.addEventListener(cast.framework.events.EventType.PLAYER_LOAD_COMPLETE, () => {
+    const audioTracksManager = playerManager.getAudioTracksManager();
+    const tracks = audioTracksManager.getTracks();
+
+    if (audioTrack) {
+      for (let i = 0, l = tracks.length; i < l; ++i) {
+        if (tracks[i].language === audioTrack) {
+          audioTracksManager.setActiveById(tracks[i].trackId);
+          break;
+        }
+      }
+    }
+  });
+
+  playerManager.setMessageInterceptor(cast.framework.messages.MessageType.LOAD, (loadRequestData) => {
+    loadRequestData.media.hlsSegmentFormat = cast.framework.messages.HlsSegmentFormat.TS;
+    return loadRequestData;
+  });
+
+  context.sendCustomMessage(MESSAGE_CHANNEL, undefined, 'init');
+  context.start();
+
+</script>
+</body>
+</html>
